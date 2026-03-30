@@ -227,3 +227,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
 .edit-link:hover { background: var(--primary-lt) !important; }
 
 th[style*="cursor: pointer"]:hover { color: var(--primary); }
+
+/* Gap nights table — tighter padding since it's wide */
+.tbl-wrap table td .btn-xs { padding: 3px 8px; font-size: 11px; }

@@ -3,6 +3,7 @@ import { Ico } from './Icons';
 import {
   load, save, uid, fmtDate, fmtTs, fmtAmt, fmtBookingDate,
   fetchUnpaidBookings, makeCSV, downloadCSV, uploadToDrive,
+  fetchGapReservations, findGaps, makeGapsCSV,
   SK, WEEK_MS, DEFAULT_CFG
 } from './lib';
 
@@ -566,6 +567,225 @@ function InstModal({ inst, onSave, onClose }) {
   );
 }
 
+
+// ── Gaps View ──────────────────────────────────────────────────────────────────
+function GapsView({ insts, cfg, onSheetsExport }) {
+  const [gapData, setGapData] = useState({});   // { instId: { gaps, loading, err, fetchedAt } }
+  const [sheetsLoading, setSheetsLoading] = useState({});
+  const [sort, setSort] = useState({ field: 'gapNight', dir: 'asc' });
+  const onSort = f => setSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
+
+  const fetchGaps = async (inst) => {
+    setGapData(prev => ({ ...prev, [inst.id]: { ...(prev[inst.id] || {}), loading: true, err: null } }));
+    try {
+      const reservations = await fetchGapReservations(inst.accountId, inst.secret);
+      const gaps = findGaps(reservations);
+      setGapData(prev => ({ ...prev, [inst.id]: { gaps, loading: false, err: null, fetchedAt: Date.now() } }));
+    } catch (e) {
+      setGapData(prev => ({ ...prev, [inst.id]: { ...(prev[inst.id] || {}), loading: false, err: e.message } }));
+    }
+  };
+
+  const fetchAllGaps = () => insts.forEach(fetchGaps);
+
+  const anyLoading = Object.values(gapData).some(d => d.loading);
+
+  // Merge all gaps across instances, tag with instance name
+  const allGaps = insts.flatMap(inst => {
+    const d = gapData[inst.id];
+    if (!d?.gaps) return [];
+    return d.gaps.map(g => ({ ...g, _instName: inst.name, _instId: inst.id }));
+  });
+
+  const sortedGaps = [...allGaps].sort((a, b) => {
+    const av = sort.field === 'gapNight' ? a.gapNight : (sort.field === 'listing' ? a.listingName : a.gapNight);
+    const bv = sort.field === 'gapNight' ? b.gapNight : (sort.field === 'listing' ? b.listingName : b.gapNight);
+    return sort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+
+  const handleCSV = () => {
+    const csv = makeGapsCSV(sortedGaps);
+    const date = new Date().toISOString().slice(0, 10);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = Object.assign(document.createElement('a'), { href: url, download: `Plux-Gap-Nights-${date}.csv` });
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  };
+
+  const handleSheets = async () => {
+    if (!cfg.gClientId?.trim()) { alert('Configure Google Drive Client ID in Settings first.'); return; }
+    setSheetsLoading(true);
+    try {
+      const csv = makeGapsCSV(sortedGaps);
+      const date = new Date().toISOString().slice(0, 10);
+      await onSheetsExport(csv, `Plux-Gap-Nights-${date}`);
+    } finally { setSheetsLoading(false); }
+  };
+
+  const hasDrive = !!cfg.gClientId?.trim();
+  const hasData = allGaps.length > 0;
+  const neverFetched = insts.length > 0 && Object.keys(gapData).length === 0;
+
+  return (
+    <div>
+      <div className="page-hdr">
+        <div>
+          <div className="page-title">Gap Night Upsells</div>
+          <div className="page-sub">One-night gaps between consecutive bookings across all listings (next 90 days)</div>
+        </div>
+        <div className="actions">
+          {hasData && <>
+            <button className="btn btn-sec" onClick={handleCSV}>{Ico.download}&nbsp;Download CSV</button>
+            <button className="btn btn-gdrive" onClick={handleSheets} disabled={sheetsLoading || !hasDrive} title={!hasDrive ? 'Add Google Drive Client ID in Settings' : ''}>
+              {sheetsLoading ? <><span className="spin-ring" />&nbsp;Creating Sheet…</> : <>{Ico.gdrive}&nbsp;Export to Sheets</>}
+            </button>
+          </>}
+          {insts.length > 0 && (
+            <button className="btn btn-pri" onClick={fetchAllGaps} disabled={anyLoading}>
+              {anyLoading ? <><span className="spin-ring" />&nbsp;Fetching…</> : <>{Ico.refresh}&nbsp;{neverFetched ? 'Fetch Gaps' : 'Refresh All'}</>}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Per-instance status row */}
+      {insts.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+          {insts.map(inst => {
+            const d = gapData[inst.id];
+            return (
+              <div key={inst.id} style={{ background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 'var(--r8)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                <span className={`dot ${d?.loading ? 'spin-dot' : d?.err ? 'dead' : d?.gaps ? 'live' : ''}`} />
+                <span style={{ fontWeight: 600 }}>{inst.name}</span>
+                {d?.gaps && <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{d.gaps.length} gap{d.gaps.length !== 1 ? 's' : ''}</span>}
+                {d?.err && <span style={{ color: 'var(--err)', fontSize: 12 }}>⚠ {d.err.slice(0, 50)}</span>}
+                {!d && <span style={{ color: 'var(--tx-mu)', fontSize: 12 }}>Not fetched</span>}
+                <button className="btn btn-ghost btn-xs" onClick={() => fetchGaps(inst)} disabled={d?.loading}>
+                  {d?.loading ? '…' : '↺'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {insts.length === 0 ? (
+        <div className="empty">
+          <div className="empty-ico">{Ico.calendar}</div>
+          <div className="empty-title">No instances configured</div>
+          <div className="empty-desc">Add a Hostaway instance to start finding gap night upsell opportunities.</div>
+        </div>
+      ) : neverFetched ? (
+        <div className="empty">
+          <div className="empty-ico">{Ico.calendar}</div>
+          <div className="empty-title">Ready to find gaps</div>
+          <div className="empty-desc">Click "Fetch Gaps" to scan all listings for one-night gaps in the next 90 days.</div>
+          <button className="btn btn-pri" onClick={fetchAllGaps} disabled={anyLoading}>
+            {anyLoading ? 'Fetching…' : 'Fetch Gaps'}
+          </button>
+        </div>
+      ) : sortedGaps.length === 0 && !anyLoading ? (
+        <div className="empty">
+          <div className="empty-ico" style={{ color: 'var(--ok)' }}>{Ico.check}</div>
+          <div className="empty-title">No gap nights found</div>
+          <div className="empty-desc">No one-night gaps between bookings in the next 90 days. Nice tight calendar!</div>
+        </div>
+      ) : (
+        <>
+          <div style={{ fontSize: 12, color: 'var(--tx-mu)', marginBottom: 14 }}>
+            <strong style={{ color: 'var(--primary)', fontSize: 16 }}>{sortedGaps.length}</strong> gap night{sortedGaps.length !== 1 ? 's' : ''} found across all listings
+          </div>
+          <div className="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <SortTh label="Listing"    field="listing"   sort={sort} onSort={onSort} />
+                  <SortTh label="Gap Night"  field="gapNight"  sort={sort} onSort={onSort} />
+                  <th>Departing Guest</th>
+                  <th>Platform</th>
+                  <th>Checkout</th>
+                  <th style={{ textAlign: 'center' }}>Message</th>
+                  <th>Arriving Guest</th>
+                  <th>Platform</th>
+                  <th>Check-in</th>
+                  <th style={{ textAlign: 'center' }}>Message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedGaps.map((g, i) => (
+                  <tr key={i}>
+                    <td style={{ fontWeight: 600 }}>{g.listingName}</td>
+                    <td className="num" style={{ fontWeight: 700, color: 'var(--primary)' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--primary)', display: 'inline-block' }} />
+                        {fmtDate(g.gapNight)}
+                      </span>
+                    </td>
+                    {/* Departing guest */}
+                    <td style={{ fontWeight: 500 }}>{g.departing.guestName || '—'}</td>
+                    <td><ChannelLogo name={g.departing.channelName || g.departing.source} /></td>
+                    <td className="num" style={{ color: 'var(--tx-m)' }}>{fmtDate(g.departing.checkOutDate || g.departing.departureDate)}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      {g.departing.conversationId ? (
+                        <a
+                          href={`https://dashboard.hostaway.com/messages/inbox/${g.departing.conversationId}`}
+                          target="_blank" rel="noreferrer"
+                          className="btn btn-sec btn-xs"
+                          title={`Message ${g.departing.guestName}`}
+                          style={{ display: 'inline-flex', gap: 4 }}
+                        >
+                          {Ico.message} Message
+                        </a>
+                      ) : (
+                        <a
+                          href={`https://dashboard.hostaway.com/reservations/${g.departing.id || g.departing.reservationId}/`}
+                          target="_blank" rel="noreferrer"
+                          className="btn btn-sec btn-xs"
+                          title="Open reservation"
+                          style={{ display: 'inline-flex', gap: 4 }}
+                        >
+                          {Ico.extLink} View
+                        </a>
+                      )}
+                    </td>
+                    {/* Arriving guest */}
+                    <td style={{ fontWeight: 500 }}>{g.arriving.guestName || '—'}</td>
+                    <td><ChannelLogo name={g.arriving.channelName || g.arriving.source} /></td>
+                    <td className="num" style={{ color: 'var(--tx-m)' }}>{fmtDate(g.arriving.checkInDate || g.arriving.arrivalDate)}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      {g.arriving.conversationId ? (
+                        <a
+                          href={`https://dashboard.hostaway.com/messages/inbox/${g.arriving.conversationId}`}
+                          target="_blank" rel="noreferrer"
+                          className="btn btn-sec btn-xs"
+                          title={`Message ${g.arriving.guestName}`}
+                          style={{ display: 'inline-flex', gap: 4 }}
+                        >
+                          {Ico.message} Message
+                        </a>
+                      ) : (
+                        <a
+                          href={`https://dashboard.hostaway.com/reservations/${g.arriving.id || g.arriving.reservationId}/`}
+                          target="_blank" rel="noreferrer"
+                          className="btn btn-sec btn-xs"
+                          title="Open reservation"
+                          style={{ display: 'inline-flex', gap: 4 }}
+                        >
+                          {Ico.extLink} View
+                        </a>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── App ────────────────────────────────────────────────────────────────────────
 export default function App() {
   const [insts, setInsts] = useState(() => load(SK.inst, []));
@@ -689,6 +909,9 @@ export default function App() {
           <button className={`nav-btn ${view === 'settings' ? 'active' : ''}`} onClick={() => { setView('settings'); setSelId(null); }}>
             {Ico.settings}&nbsp;Settings
           </button>
+          <button className={`nav-btn ${view === 'gaps' ? 'active' : ''}`} onClick={() => { setView('gaps'); setSelId(null); }}>
+            {Ico.calendar}&nbsp;Gap Nights
+          </button>
           {insts.length > 0 && <>
             <div className="sb-sep">Instances</div>
             {insts.map(i => (
@@ -729,6 +952,16 @@ export default function App() {
               onFetch={fetchInst} onSelect={id => { setSelId(id); setView('inst'); }} />
           )}
           {view === 'settings' && <SettingsView cfg={cfg} onChange={setCfg} />}
+          {view === 'gaps' && (
+            <GapsView
+              insts={insts}
+              cfg={cfg}
+              onSheetsExport={async (csv, filename) => {
+                const f = await uploadToDrive(csv, filename, cfgRef.current.gClientId);
+                toast(`Uploaded "${f.name || filename}" as Google Sheet`, 'ok');
+              }}
+            />
+          )}
         </main>
       </div>
 

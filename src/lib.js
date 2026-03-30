@@ -149,3 +149,90 @@ export async function uploadToDrive(csv, filename, clientId) {
   if (!r.ok) { const t = await r.text(); throw new Error(`Drive upload failed (${r.status}): ${t.slice(0, 150)}`); }
   return r.json();
 }
+
+// ── Gap Night Detection ────────────────────────────────────────────────────────
+export async function fetchGapReservations(accountId, secret) {
+  let r;
+  try {
+    r = await fetch('/.netlify/functions/hostaway', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId, secret, action: 'gaps' })
+    });
+  } catch (e) {
+    throw new Error(`Network error: ${e.message}`);
+  }
+  const text = await r.text();
+  if (!text) throw new Error(`Empty response (${r.status}). Check Netlify → Functions tab.`);
+  let d;
+  try { d = JSON.parse(text); } catch { throw new Error(`Unexpected response (${r.status}): ${text.slice(0, 120)}`); }
+  if (!r.ok) throw new Error(d.error || `Server error (${r.status})`);
+  return d.reservations || [];
+}
+
+// Find 1-night gaps between consecutive bookings at the same listing.
+// Returns array of gap objects, each with the departing and arriving reservation.
+export function findGaps(reservations) {
+  // Group by listing
+  const byListing = {};
+  for (const res of reservations) {
+    const key = res.listingId || res.listingMapId || res.unitId || res.listingName || 'unknown';
+    if (!byListing[key]) byListing[key] = { name: res.listingName || res.unitName || `Listing ${key}`, reservations: [] };
+    byListing[key].reservations.push(res);
+  }
+
+  const gaps = [];
+  for (const { name: listingName, reservations: resList } of Object.values(byListing)) {
+    // Sort by check-in date
+    const sorted = [...resList].sort((a, b) => {
+      const ad = a.checkInDate || a.arrivalDate || '';
+      const bd = b.checkInDate || b.arrivalDate || '';
+      return ad.localeCompare(bd);
+    });
+
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const curr = sorted[i];
+      const next = sorted[i + 1];
+      const checkout = curr.checkOutDate || curr.departureDate;
+      const checkin  = next.checkInDate  || next.arrivalDate;
+      if (!checkout || !checkin) continue;
+
+      // Calculate gap in nights
+      const checkoutMs = new Date(checkout + 'T12:00:00').getTime();
+      const checkinMs  = new Date(checkin  + 'T12:00:00').getTime();
+      const nights = Math.round((checkinMs - checkoutMs) / 86400000);
+
+      if (nights === 1) {
+        gaps.push({
+          listingName,
+          gapNight: checkout,            // the available night
+          departing: curr,               // guest checking out before the gap
+          arriving:  next,               // guest checking in after the gap
+        });
+      }
+    }
+  }
+
+  // Sort gaps by gap night date
+  return gaps.sort((a, b) => a.gapNight.localeCompare(b.gapNight));
+}
+
+// CSV for gap nights export
+export function makeGapsCSV(gaps) {
+  const cols = [
+    ['Listing',              g => g.listingName],
+    ['Gap Night',            g => g.gapNight],
+    ['Departing Guest',      g => g.departing.guestName || ''],
+    ['Departing Channel',    g => g.departing.channelName || g.departing.source || ''],
+    ['Departing Checkout',   g => g.departing.checkOutDate || g.departing.departureDate || ''],
+    ['Departing Message URL',g => g.departing.conversationId ? `https://dashboard.hostaway.com/messages/inbox/${g.departing.conversationId}` : ''],
+    ['Arriving Guest',       g => g.arriving.guestName || ''],
+    ['Arriving Channel',     g => g.arriving.channelName || g.arriving.source || ''],
+    ['Arriving Checkin',     g => g.arriving.checkInDate || g.arriving.arrivalDate || ''],
+    ['Arriving Message URL', g => g.arriving.conversationId ? `https://dashboard.hostaway.com/messages/inbox/${g.arriving.conversationId}` : ''],
+  ];
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const hdr = cols.map(([h]) => esc(h)).join(',');
+  const rows = gaps.map(g => cols.map(([, fn]) => esc(fn(g))).join(','));
+  return '\uFEFF' + [hdr, ...rows].join('\n');
+}
