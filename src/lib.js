@@ -133,7 +133,12 @@ function getGoogleToken(clientId) {
 
 export async function uploadToDrive(csv, filename, clientId) {
   const token = await getGoogleToken(clientId);
-  const meta = JSON.stringify({ name: filename, mimeType: 'text/csv' });
+  // Setting mimeType to Google Sheets causes Drive to auto-convert the CSV into a native Sheet
+  const sheetName = filename.replace(/\.csv$/i, '');
+  const meta = JSON.stringify({
+    name: sheetName,
+    mimeType: 'application/vnd.google-apps.spreadsheet'
+  });
   const bnd = 'plux_bnd_xk7';
   const body = `--${bnd}\r\nContent-Type: application/json\r\n\r\n${meta}\r\n--${bnd}\r\nContent-Type: text/csv\r\n\r\n${csv}\r\n--${bnd}--`;
   const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {

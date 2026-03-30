@@ -292,8 +292,8 @@ function InstView({ inst, hasDrive, driveLoading, onFetch, onCSV, onDrive, onEdi
           </button>
           {bk.length > 0 && <>
             <button className="btn btn-sec" onClick={onCSV}>{Ico.download}&nbsp;Download CSV</button>
-            <button className="btn btn-gdrive" onClick={onDrive} disabled={driveLoading || !hasDrive} title={!hasDrive ? 'Add Google Drive Client ID in Settings' : ''}>
-              {driveLoading ? <><span className="spin-ring" />&nbsp;Uploading…</> : <>{Ico.gdrive}&nbsp;Export to Drive</>}
+            <button className="btn btn-gdrive" onClick={onDrive} disabled={driveLoading || !hasDrive} title={!hasDrive ? 'Add Google Drive Client ID in Settings to export as Google Sheet' : ''}>
+              {driveLoading ? <><span className="spin-ring" />&nbsp;Creating Sheet…</> : <>{Ico.gdrive}&nbsp;Export to Sheets</>}
             </button>
           </>}
           <button className="btn btn-err btn-sm" onClick={() => { if (window.confirm(`Delete instance "${inst.name}"?`)) onDelete(); }}>Delete</button>
@@ -303,7 +303,7 @@ function InstView({ inst, hasDrive, driveLoading, onFetch, onCSV, onDrive, onEdi
       {!hasDrive && bk.length > 0 && (
         <div className="alert alert-info" style={{ marginBottom: 16 }}>
           {Ico.warn}
-          <span>Google Drive export not configured. Add your OAuth Client ID in <strong>Settings</strong> to enable one-click Drive exports.</span>
+          <span>Google Sheets export not configured. Add your OAuth Client ID in <strong>Settings</strong> to enable one-click Google Sheets exports.</span>
         </div>
       )}
 
@@ -456,7 +456,7 @@ function SettingsView({ cfg, onChange }) {
       <div className="sg">
         <div className="sg-hdr">
           <div className="sg-title">Google Drive Integration</div>
-          <div className="sg-desc">Export unpaid booking reports directly to your Google Drive with one click</div>
+          <div className="sg-desc">Export unpaid booking reports directly to Google Sheets with one click</div>
         </div>
         <div className="sg-row col">
           <div>
@@ -627,8 +627,8 @@ export default function App() {
       const date = new Date().toISOString().slice(0, 10);
       const filename = `Plux-Unpaid-${inst.name.replace(/\s+/g, '-')}-${date}.csv`;
       const f = await uploadToDrive(csv, filename, cfgRef.current.gClientId);
-      toast(`Uploaded "${f.name || filename}" to Google Drive`, 'ok');
-    } catch (e) { toast(`Google Drive: ${e.message}`, 'err'); }
+      toast(`Uploaded "${f.name || filename}" as Google Sheet`, 'ok');
+    } catch (e) { toast(`Google Sheets: ${e.message}`, 'err'); }
     finally { setDriveLoading(prev => ({ ...prev, [inst.id]: false })); }
   };
 
