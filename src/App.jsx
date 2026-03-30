@@ -20,6 +20,79 @@ function StatusChip({ status }) {
   return <span className="chip" style={{ background: s.bg, color: s.c, textTransform: 'capitalize' }}>{status}</span>;
 }
 
+// ── Channel Logo ───────────────────────────────────────────────────────────────
+const CHANNEL_MAP = {
+  'airbnb':       { logo: 'https://a0.muscache.com/airbnb/static/icons/android-icon-192x192-c0465f9f0380893768972a31a614b670.png', label: 'Airbnb', bg: '#FF5A5F', text: '#fff' },
+  'booking.com':  { logo: 'https://cf.bstatic.com/static/img/favicon/favicon-32x32.png', label: 'Booking.com', bg: '#003580', text: '#fff' },
+  'booking':      { logo: 'https://cf.bstatic.com/static/img/favicon/favicon-32x32.png', label: 'Booking.com', bg: '#003580', text: '#fff' },
+  'vrbo':         { logo: 'https://www.vrbo.com/favicon.ico', label: 'Vrbo', bg: '#1B5EAB', text: '#fff' },
+  'homeaway':     { logo: 'https://www.vrbo.com/favicon.ico', label: 'HomeAway', bg: '#1B5EAB', text: '#fff' },
+  'expedia':      { logo: 'https://www.expedia.com/favicon.ico', label: 'Expedia', bg: '#FFC72C', text: '#1A1A1A' },
+  'tripadvisor':  { logo: 'https://static.tacdn.com/img2/brand_refresh/Tripadvisor_logoset_solid_green.svg', label: 'Tripadvisor', bg: '#00AA6C', text: '#fff' },
+  'trip advisor': { logo: 'https://static.tacdn.com/img2/brand_refresh/Tripadvisor_logoset_solid_green.svg', label: 'Tripadvisor', bg: '#00AA6C', text: '#fff' },
+  'agoda':        { logo: 'https://www.agoda.com/favicon.ico', label: 'Agoda', bg: '#E3242B', text: '#fff' },
+  'google':       { logo: 'https://www.google.com/favicon.ico', label: 'Google', bg: '#4285F4', text: '#fff' },
+  'direct':       { logo: null, label: 'Direct', bg: 'var(--primary-lt)', text: 'var(--primary-dk)' },
+  'website':      { logo: null, label: 'Website', bg: 'var(--primary-lt)', text: 'var(--primary-dk)' },
+  'owner':        { logo: null, label: 'Owner', bg: 'var(--bg)', text: 'var(--tx-m)' },
+};
+
+function ChannelLogo({ name }) {
+  const key = (name || '').toLowerCase().trim();
+  const match = CHANNEL_MAP[key] || Object.entries(CHANNEL_MAP).find(([k]) => key.includes(k))?.[1];
+
+  if (!match) {
+    // Unknown channel — styled text badge
+    const initials = (name || '?').slice(0, 2).toUpperCase();
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: 'var(--tx-m)' }}>
+        <span style={{ width: 22, height: 22, borderRadius: 4, background: 'var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: 'var(--tx-mu)', flexShrink: 0 }}>{initials}</span>
+        {name}
+      </span>
+    );
+  }
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 500, color: 'var(--tx)' }}>
+      {match.logo ? (
+        <img
+          src={match.logo}
+          alt={match.label}
+          width={20} height={20}
+          style={{ borderRadius: 4, objectFit: 'contain', background: match.bg, padding: 2, flexShrink: 0 }}
+          onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+        />
+      ) : null}
+      <span style={{ display: 'none', width: 20, height: 20, borderRadius: 4, background: match.bg, color: match.text, alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+        {match.label.slice(0, 2).toUpperCase()}
+      </span>
+      {match.label}
+    </span>
+  );
+}
+
+// ── Payment Chip ───────────────────────────────────────────────────────────────
+function PaymentChip({ status }) {
+  if (!status) return <span style={{ color: 'var(--tx-mu)', fontSize: 12 }}>—</span>;
+  const s = status.toLowerCase();
+  const map = {
+    'paid':              { bg: 'var(--ok-bg)',   c: 'var(--ok)',   label: 'Paid' },
+    'partially paid':    { bg: 'var(--warn-bg)', c: 'var(--warn)', label: 'Partial' },
+    'partial':           { bg: 'var(--warn-bg)', c: 'var(--warn)', label: 'Partial' },
+    'unpaid':            { bg: 'var(--err-bg)',  c: 'var(--err)',  label: 'Unpaid' },
+    'not paid':          { bg: 'var(--err-bg)',  c: 'var(--err)',  label: 'Unpaid' },
+    'awaiting payment':  { bg: 'var(--err-bg)',  c: 'var(--err)',  label: 'Awaiting' },
+    'overdue':           { bg: '#3D0000',        c: '#FF6B6B',     label: 'Overdue' },
+    'refunded':          { bg: 'var(--info-bg)', c: 'var(--info)', label: 'Refunded' },
+  };
+  const style = map[s] || { bg: 'var(--bg)', c: 'var(--tx-m)', label: status };
+  return (
+    <span className="chip" style={{ background: style.bg, color: style.c, fontSize: 11 }}>
+      {style.label}
+    </span>
+  );
+}
+
 // ── Instance Card ──────────────────────────────────────────────────────────────
 function InstCard({ inst, onClick, onFetch }) {
   const n = inst.bookings?.length || 0;
@@ -119,7 +192,7 @@ function DashboardView({ insts, totalUnpaid, totalVal, onSelect, onFetch, onAdd 
                 <table>
                   <thead><tr>
                     <th>Instance</th><th>Guest</th><th>Property</th><th>Channel</th>
-                    <th>Check-in</th><th>Check-out</th><th>Amount</th><th>Status</th><th></th>
+                    <th>Check-in</th><th>Check-out</th><th>Amount</th><th>Status</th><th>Payment</th><th></th>
                   </tr></thead>
                   <tbody>
                     {allBookings.map((b, i) => (
@@ -127,11 +200,12 @@ function DashboardView({ insts, totalUnpaid, totalVal, onSelect, onFetch, onAdd 
                         <td><span className="chip" style={{ background: 'var(--primary-lt)', color: 'var(--primary-dk)' }}>{b._inst}</span></td>
                         <td style={{ fontWeight: 500 }}>{b.guestName || '—'}</td>
                         <td style={{ color: 'var(--tx-m)' }}>{b.listingName || b.unitName || '—'}</td>
-                        <td>{b.channelName || b.source || '—'}</td>
+                        <td><ChannelLogo name={b.channelName || b.source} /></td>
                         <td className="num">{fmtDate(b.checkInDate || b.arrivalDate)}</td>
                         <td className="num">{fmtDate(b.checkOutDate || b.departureDate)}</td>
                         <td className="num" style={{ fontWeight: 600, color: 'var(--err)' }}>{fmtAmt(b.totalPrice || b.price, b.currency)}</td>
                         <td><StatusChip status={b.status} /></td>
+                        <td><PaymentChip status={b.paymentStatus} /></td>
                         <td style={{ textAlign: 'center', width: 40 }}>
                           {(b.id || b.reservationId) && (
                             <a href={`https://dashboard.hostaway.com/reservations/${b.id || b.reservationId}/edit`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: 'var(--primary)', display: 'inline-flex', padding: 4, borderRadius: 4, transition: 'background .15s' }} title="Edit in Hostaway">
@@ -239,7 +313,7 @@ function InstView({ inst, hasDrive, driveLoading, onFetch, onCSV, onDrive, onEdi
             <thead><tr>
               <th>Booking ID</th><th>Guest</th><th>Property</th><th>Channel</th>
               <th>Check-in</th><th>Check-out</th><th>Nights</th><th>Amount</th>
-              <th>Status</th><th>Booked On</th><th></th>
+              <th>Status</th><th>Payment</th><th>Booked On</th><th></th>
             </tr></thead>
             <tbody>
               {bk.map((b, i) => (
@@ -250,12 +324,13 @@ function InstView({ inst, hasDrive, driveLoading, onFetch, onCSV, onDrive, onEdi
                     {b.guestEmail && <div style={{ fontSize: 11, color: 'var(--tx-mu)' }}>{b.guestEmail}</div>}
                   </td>
                   <td style={{ color: 'var(--tx-m)' }}>{b.listingName || b.unitName || b.propertyName || '—'}</td>
-                  <td><span style={{ fontSize: 11, background: 'var(--bg)', border: '1px solid var(--border)', padding: '2px 7px', borderRadius: 4 }}>{b.channelName || b.source || '—'}</span></td>
+                  <td><ChannelLogo name={b.channelName || b.source} /></td>
                   <td className="num">{fmtDate(b.checkInDate || b.arrivalDate)}</td>
                   <td className="num">{fmtDate(b.checkOutDate || b.departureDate)}</td>
                   <td className="num" style={{ textAlign: 'center' }}>{b.nightsCount || b.nights || '—'}</td>
                   <td className="num" style={{ fontWeight: 600, color: 'var(--err)' }}>{fmtAmt(b.totalPrice || b.price, b.currency)}</td>
                   <td><StatusChip status={b.status} /></td>
+                  <td><PaymentChip status={b.paymentStatus} /></td>
                   <td className="num" style={{ fontSize: 12, color: 'var(--tx-mu)' }}>{fmtDate(b.createdAt || b.insertionTime)}</td>
                   <td style={{ textAlign: 'center', width: 40 }}>
                     {(b.id || b.reservationId) && (

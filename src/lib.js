@@ -58,6 +58,7 @@ const CSV_COLS = [
   ['Total Amount', b => b.totalPrice ?? b.price ?? ''],
   ['Currency',     b => b.currency ?? 'NZD'],
   ['Status',       b => b.status ?? ''],
+  ['Payment Status', b => b.paymentStatus ?? ''],
   ['Booked On',    b => b.createdAt ?? b.insertionTime ?? ''],
 ];
 
