@@ -225,3 +225,5 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
 }
 
 .edit-link:hover { background: var(--primary-lt) !important; }
+
+th[style*="cursor: pointer"]:hover { color: var(--primary); }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Ico } from './Icons';
 import {
-  load, save, uid, fmtDate, fmtTs, fmtAmt,
+  load, save, uid, fmtDate, fmtTs, fmtAmt, fmtBookingDate,
   fetchUnpaidBookings, makeCSV, downloadCSV, uploadToDrive,
   SK, WEEK_MS, DEFAULT_CFG
 } from './lib';
@@ -130,11 +130,46 @@ function InstCard({ inst, onClick, onFetch }) {
   );
 }
 
+// ── Sort Header ───────────────────────────────────────────────────────────────
+function SortTh({ label, field, sort, onSort }) {
+  const active = sort.field === field;
+  const asc = active && sort.dir === 'asc';
+  return (
+    <th
+      onClick={() => onSort(field)}
+      style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+    >
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {label}
+        <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 1, opacity: active ? 1 : 0.3 }}>
+          <svg width="8" height="5" viewBox="0 0 8 5" fill="none">
+            <path d="M4 0L8 5H0L4 0Z" fill={active && asc ? 'var(--primary)' : 'currentColor'} />
+          </svg>
+          <svg width="8" height="5" viewBox="0 0 8 5" fill="none">
+            <path d="M4 5L0 0H8L4 5Z" fill={active && !asc ? 'var(--primary)' : 'currentColor'} />
+          </svg>
+        </span>
+      </span>
+    </th>
+  );
+}
+
+function sortBookings(bookings, sort) {
+  const { field, dir } = sort;
+  return [...bookings].sort((a, b) => {
+    const av = (a[field === 'checkIn' ? 'checkInDate' : 'checkOutDate'] || a[field === 'checkIn' ? 'arrivalDate' : 'departureDate'] || '');
+    const bv = (b[field === 'checkIn' ? 'checkInDate' : 'checkOutDate'] || b[field === 'checkIn' ? 'arrivalDate' : 'departureDate'] || '');
+    return dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+}
+
 // ── Dashboard View ─────────────────────────────────────────────────────────────
 function DashboardView({ insts, totalUnpaid, totalVal, onSelect, onFetch, onAdd }) {
-  const allBookings = insts
-    .flatMap(i => (i.bookings || []).map(b => ({ ...b, _inst: i.name, _iid: i.id })))
-    .sort((a, b) => (a.checkInDate || '') > (b.checkInDate || '') ? 1 : -1);
+  const [sort, setSort] = useState({ field: 'checkIn', dir: 'asc' });
+  const onSort = field => setSort(prev => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }));
+
+  const rawBookings = insts.flatMap(i => (i.bookings || []).map(b => ({ ...b, _inst: i.name, _iid: i.id })));
+  const allBookings = sortBookings(rawBookings, sort);
   const lastFetch = insts.filter(i => i.fetchedAt).reduce((m, i) => Math.max(m, i.fetchedAt), 0);
 
   return (
@@ -192,7 +227,9 @@ function DashboardView({ insts, totalUnpaid, totalVal, onSelect, onFetch, onAdd 
                 <table>
                   <thead><tr>
                     <th>Instance</th><th>Guest</th><th>Property</th><th>Channel</th>
-                    <th>Check-in</th><th>Check-out</th><th>Amount</th><th>Status</th><th>Payment</th><th></th>
+                    <SortTh label="Check-in"  field="checkIn"  sort={sort} onSort={onSort} />
+                    <SortTh label="Check-out" field="checkOut" sort={sort} onSort={onSort} />
+                    <th>Amount</th><th>Status</th><th>Payment</th><th></th>
                   </tr></thead>
                   <tbody>
                     {allBookings.map((b, i) => (
@@ -228,9 +265,13 @@ function DashboardView({ insts, totalUnpaid, totalVal, onSelect, onFetch, onAdd 
 
 // ── Instance Detail ────────────────────────────────────────────────────────────
 function InstView({ inst, hasDrive, driveLoading, onFetch, onCSV, onDrive, onEdit, onDelete }) {
-  const bk = inst.bookings || [];
-  const totalAmt = bk.reduce((s, b) => s + Number(b.totalPrice || b.price || 0), 0);
-  const channels = [...new Set(bk.map(b => b.channelName || b.source || 'Unknown'))];
+  const [sort, setSort] = useState({ field: 'checkIn', dir: 'asc' });
+  const onSort = field => setSort(prev => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }));
+
+  const rawBk = inst.bookings || [];
+  const bk = sortBookings(rawBk, sort);
+  const totalAmt = rawBk.reduce((s, b) => s + Number(b.totalPrice || b.price || 0), 0);
+  const channels = [...new Set(rawBk.map(b => b.channelName || b.source || 'Unknown'))];
   const isCorsErr = false; // API calls now go through Netlify function, no CORS issues
 
   return (
@@ -312,7 +353,9 @@ function InstView({ inst, hasDrive, driveLoading, onFetch, onCSV, onDrive, onEdi
           <table>
             <thead><tr>
               <th>Booking ID</th><th>Guest</th><th>Property</th><th>Channel</th>
-              <th>Check-in</th><th>Check-out</th><th>Nights</th><th>Amount</th>
+              <SortTh label="Check-in"  field="checkIn"  sort={sort} onSort={onSort} />
+              <SortTh label="Check-out" field="checkOut" sort={sort} onSort={onSort} />
+              <th>Nights</th><th>Amount</th>
               <th>Status</th><th>Payment</th><th>Booked On</th><th></th>
             </tr></thead>
             <tbody>
@@ -331,7 +374,7 @@ function InstView({ inst, hasDrive, driveLoading, onFetch, onCSV, onDrive, onEdi
                   <td className="num" style={{ fontWeight: 600, color: 'var(--err)' }}>{fmtAmt(b.totalPrice || b.price, b.currency)}</td>
                   <td><StatusChip status={b.status} /></td>
                   <td><PaymentChip status={b.paymentStatus} /></td>
-                  <td className="num" style={{ fontSize: 12, color: 'var(--tx-mu)' }}>{fmtDate(b.createdAt || b.insertionTime)}</td>
+                  <td className="num" style={{ fontSize: 12, color: 'var(--tx-mu)' }}>{fmtBookingDate(b.insertionTime || b.reservationDate || b.createdAt || b.bookingDate)}</td>
                   <td style={{ textAlign: 'center', width: 40 }}>
                     {(b.id || b.reservationId) && (
                       <a href={`https://dashboard.hostaway.com/reservations/${b.id || b.reservationId}/edit`} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', display: 'inline-flex', padding: 4, borderRadius: 4, transition: 'background .15s' }} title="Edit in Hostaway">

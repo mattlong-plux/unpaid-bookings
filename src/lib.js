@@ -9,8 +9,43 @@ export const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v))
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
 // ── Formatting ─────────────────────────────────────────────────────────────────
-export const fmtDate = (d) => d ? new Date(d + (d.length === 10 ? 'T12:00:00' : '')).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-export const fmtTs = (ts) => ts ? new Date(ts).toLocaleString('en-NZ', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Never';
+// Formats a date string like "2026-02-18" → "18 Feb 2026"
+export const fmtDate = (d) => {
+  if (!d) return '—';
+  try {
+    const date = new Date(String(d).length === 10 ? d + 'T12:00:00' : d);
+    if (isNaN(date)) return '—';
+    return date.toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch { return '—'; }
+};
+
+// Formats a Unix timestamp (seconds or ms) or ISO string → "18 Feb, 02:30"
+export const fmtTs = (ts) => {
+  if (!ts) return 'Never';
+  try {
+    // Hostaway returns Unix seconds (10 digits); JS needs milliseconds (13 digits)
+    const ms = String(ts).length <= 10 ? Number(ts) * 1000 : Number(ts);
+    const date = new Date(ms);
+    if (isNaN(date)) return 'Never';
+    return date.toLocaleString('en-NZ', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  } catch { return 'Never'; }
+};
+
+// Formats a booking date — handles Unix timestamps (seconds), ISO strings, or YYYY-MM-DD
+export const fmtBookingDate = (val) => {
+  if (!val) return '—';
+  const n = Number(val);
+  if (!isNaN(n) && n > 1000000000) {
+    // Unix timestamp — convert seconds → ms if needed
+    const ms = String(val).length <= 10 ? n * 1000 : n;
+    try {
+      const date = new Date(ms);
+      if (isNaN(date)) return '—';
+      return date.toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch { return '—'; }
+  }
+  return fmtDate(val);
+};
 export const fmtAmt = (n, cur = 'NZD') => {
   if (n == null || n === '') return '—';
   try { return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: cur || 'NZD', minimumFractionDigits: 2 }).format(Number(n)); }
@@ -59,7 +94,7 @@ const CSV_COLS = [
   ['Currency',     b => b.currency ?? 'NZD'],
   ['Status',       b => b.status ?? ''],
   ['Payment Status', b => b.paymentStatus ?? ''],
-  ['Booked On',    b => b.createdAt ?? b.insertionTime ?? ''],
+  ['Booked On',    b => { const v = b.insertionTime || b.reservationDate || b.createdAt || b.bookingDate; if (!v) return ''; const n = Number(v); if (!isNaN(n) && n > 1000000000) { return new Date(String(v).length <= 10 ? n*1000 : n).toISOString().slice(0,10); } return String(v); }],
 ];
 
 const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
