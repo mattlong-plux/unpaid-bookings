@@ -571,15 +571,18 @@ function InstModal({ inst, onSave, onClose }) {
 // ── Gaps View ──────────────────────────────────────────────────────────────────
 function GapsView({ insts, cfg, onSheetsExport }) {
   const [gapData, setGapData] = useState({});   // { instId: { gaps, loading, err, fetchedAt } }
-  const [sheetsLoading, setSheetsLoading] = useState({});
+  const [sheetsLoading, setSheetsLoading] = useState(false);
   const [sort, setSort] = useState({ field: 'gapNight', dir: 'asc' });
+  const [activeInsts, setActiveInsts] = useState(() => new Set()); // filtered instance IDs
   const onSort = f => setSort(p => ({ field: f, dir: p.field === f && p.dir === 'asc' ? 'desc' : 'asc' }));
+
+  const today = new Date().toISOString().slice(0, 10);
 
   const fetchGaps = async (inst) => {
     setGapData(prev => ({ ...prev, [inst.id]: { ...(prev[inst.id] || {}), loading: true, err: null } }));
     try {
       const reservations = await fetchGapReservations(inst.accountId, inst.secret);
-      const gaps = findGaps(reservations);
+      const gaps = findGaps(reservations).filter(g => g.gapNight >= today);
       setGapData(prev => ({ ...prev, [inst.id]: { gaps, loading: false, err: null, fetchedAt: Date.now() } }));
     } catch (e) {
       setGapData(prev => ({ ...prev, [inst.id]: { ...(prev[inst.id] || {}), loading: false, err: e.message } }));
@@ -590,16 +593,28 @@ function GapsView({ insts, cfg, onSheetsExport }) {
 
   const anyLoading = Object.values(gapData).some(d => d.loading);
 
-  // Merge all gaps across instances, tag with instance name
+  // Toggle instance filter — empty set = all shown
+  const toggleInst = id => setActiveInsts(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const clearFilter = () => setActiveInsts(new Set());
+
+  // Merge gaps across instances, applying instance filter
   const allGaps = insts.flatMap(inst => {
     const d = gapData[inst.id];
     if (!d?.gaps) return [];
     return d.gaps.map(g => ({ ...g, _instName: inst.name, _instId: inst.id }));
   });
 
-  const sortedGaps = [...allGaps].sort((a, b) => {
-    const av = sort.field === 'gapNight' ? a.gapNight : (sort.field === 'listing' ? a.listingName : a.gapNight);
-    const bv = sort.field === 'gapNight' ? b.gapNight : (sort.field === 'listing' ? b.listingName : b.gapNight);
+  const filteredGaps = activeInsts.size > 0
+    ? allGaps.filter(g => activeInsts.has(g._instId))
+    : allGaps;
+
+  const sortedGaps = [...filteredGaps].sort((a, b) => {
+    const av = sort.field === 'listing' ? a.listingName : a.gapNight;
+    const bv = sort.field === 'listing' ? b.listingName : b.gapNight;
     return sort.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
   });
 
@@ -623,15 +638,16 @@ function GapsView({ insts, cfg, onSheetsExport }) {
   };
 
   const hasDrive = !!cfg.gClientId?.trim();
-  const hasData = allGaps.length > 0;
+  const hasData = sortedGaps.length > 0;
   const neverFetched = insts.length > 0 && Object.keys(gapData).length === 0;
+  const instsWithData = insts.filter(i => gapData[i.id]?.gaps);
 
   return (
     <div>
       <div className="page-hdr">
         <div>
           <div className="page-title">Gap Night Upsells</div>
-          <div className="page-sub">One-night gaps between consecutive bookings across all listings (next 90 days)</div>
+          <div className="page-sub">One-night gaps between consecutive bookings — from today through the next 90 days</div>
         </div>
         <div className="actions">
           {hasData && <>
@@ -648,24 +664,67 @@ function GapsView({ insts, cfg, onSheetsExport }) {
         </div>
       </div>
 
-      {/* Per-instance status row */}
+      {/* Per-instance status + filter pills */}
       {insts.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
-          {insts.map(inst => {
-            const d = gapData[inst.id];
-            return (
-              <div key={inst.id} style={{ background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 'var(--r8)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-                <span className={`dot ${d?.loading ? 'spin-dot' : d?.err ? 'dead' : d?.gaps ? 'live' : ''}`} />
-                <span style={{ fontWeight: 600 }}>{inst.name}</span>
-                {d?.gaps && <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{d.gaps.length} gap{d.gaps.length !== 1 ? 's' : ''}</span>}
-                {d?.err && <span style={{ color: 'var(--err)', fontSize: 12 }}>⚠ {d.err.slice(0, 50)}</span>}
-                {!d && <span style={{ color: 'var(--tx-mu)', fontSize: 12 }}>Not fetched</span>}
-                <button className="btn btn-ghost btn-xs" onClick={() => fetchGaps(inst)} disabled={d?.loading}>
-                  {d?.loading ? '…' : '↺'}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--tx-mu)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 8 }}>
+            Instances
+            {activeInsts.size > 0 && (
+              <button onClick={clearFilter} style={{ marginLeft: 10, fontSize: 11, color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, padding: 0 }}>
+                Clear filter
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {insts.map(inst => {
+              const d = gapData[inst.id];
+              const isActive = activeInsts.has(inst.id);
+              const isFiltering = activeInsts.size > 0;
+              return (
+                <button
+                  key={inst.id}
+                  onClick={() => toggleInst(inst.id)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    padding: '8px 14px', borderRadius: 'var(--r8)', fontSize: 13,
+                    cursor: 'pointer', transition: 'all .15s', fontFamily: 'var(--ff-b)',
+                    fontWeight: isActive ? 700 : 500,
+                    background: isActive ? 'var(--primary)' : isFiltering ? 'var(--bg)' : 'var(--surf)',
+                    color: isActive ? 'white' : isFiltering ? 'var(--tx-mu)' : 'var(--tx)',
+                    border: `1px solid ${isActive ? 'var(--primary)' : 'var(--border)'}`,
+                    opacity: isFiltering && !isActive ? 0.6 : 1,
+                  }}
+                >
+                  <span className={`dot ${d?.loading ? 'spin-dot' : d?.err ? 'dead' : d?.gaps ? 'live' : ''}`}
+                    style={{ background: isActive ? 'rgba(255,255,255,0.7)' : undefined }} />
+                  {inst.name}
+                  {d?.gaps != null && (
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, padding: '1px 6px', borderRadius: 10,
+                      background: isActive ? 'rgba(255,255,255,0.25)' : 'var(--primary-lt)',
+                      color: isActive ? 'white' : 'var(--primary)',
+                    }}>
+                      {d.gaps.length}
+                    </span>
+                  )}
+                  {d?.loading && <span style={{ fontSize: 11, opacity: 0.8 }}>…</span>}
+                  {d?.err && <span style={{ fontSize: 11 }}>⚠</span>}
+                  {!d && <span style={{ fontSize: 11, opacity: 0.6 }}>not fetched</span>}
+                  <button
+                    onClick={e => { e.stopPropagation(); fetchGaps(inst); }}
+                    disabled={d?.loading}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 0 2px', color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--tx-mu)', fontSize: 13, lineHeight: 1 }}
+                    title={`Refresh ${inst.name}`}
+                  >↺</button>
                 </button>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+          {activeInsts.size > 0 && (
+            <div style={{ fontSize: 12, color: 'var(--tx-mu)', marginTop: 8 }}>
+              Showing {activeInsts.size} of {insts.length} instance{insts.length !== 1 ? 's' : ''} — {sortedGaps.length} gap{sortedGaps.length !== 1 ? 's' : ''}
+            </div>
+          )}
         </div>
       )}
 
@@ -679,7 +738,7 @@ function GapsView({ insts, cfg, onSheetsExport }) {
         <div className="empty">
           <div className="empty-ico">{Ico.calendar}</div>
           <div className="empty-title">Ready to find gaps</div>
-          <div className="empty-desc">Click "Fetch Gaps" to scan all listings for one-night gaps in the next 90 days.</div>
+          <div className="empty-desc">Click "Fetch Gaps" to scan all listings for one-night gaps from today through the next 90 days.</div>
           <button className="btn btn-pri" onClick={fetchAllGaps} disabled={anyLoading}>
             {anyLoading ? 'Fetching…' : 'Fetch Gaps'}
           </button>
@@ -687,13 +746,14 @@ function GapsView({ insts, cfg, onSheetsExport }) {
       ) : sortedGaps.length === 0 && !anyLoading ? (
         <div className="empty">
           <div className="empty-ico" style={{ color: 'var(--ok)' }}>{Ico.check}</div>
-          <div className="empty-title">No gap nights found</div>
-          <div className="empty-desc">No one-night gaps between bookings in the next 90 days. Nice tight calendar!</div>
+          <div className="empty-title">{activeInsts.size > 0 ? 'No gaps for selected instances' : 'No gap nights found'}</div>
+          <div className="empty-desc">{activeInsts.size > 0 ? 'Try selecting different instances or clear the filter.' : 'No one-night gaps from today through the next 90 days.'}</div>
+          {activeInsts.size > 0 && <button className="btn btn-sec" onClick={clearFilter}>Clear filter</button>}
         </div>
       ) : (
         <>
           <div style={{ fontSize: 12, color: 'var(--tx-mu)', marginBottom: 14 }}>
-            <strong style={{ color: 'var(--primary)', fontSize: 16 }}>{sortedGaps.length}</strong> gap night{sortedGaps.length !== 1 ? 's' : ''} found across all listings
+            <strong style={{ color: 'var(--primary)', fontSize: 16 }}>{sortedGaps.length}</strong> gap night{sortedGaps.length !== 1 ? 's' : ''} found{activeInsts.size > 0 ? ' (filtered)' : ' across all instances'}
           </div>
           <div className="tbl-wrap">
             <table>
