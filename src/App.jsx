@@ -942,7 +942,7 @@ export default function App() {
           <div className="logo-mark">P</div>
           <div>
             <div className="logo-text">Plux <span>Stays</span></div>
-            <div className="logo-sub">Unpaid Bookings Tracker</div>
+            <div className="logo-sub">STR Management Console</div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -971,6 +971,10 @@ export default function App() {
           </button>
           <button className={`nav-btn ${view === 'gaps' ? 'active' : ''}`} onClick={() => { setView('gaps'); setSelId(null); }}>
             {Ico.calendar}&nbsp;Gap Nights
+          </button>
+          <button className={`nav-btn ${view === 'dashboard' && !selId ? 'active' : ''}`} onClick={() => { setView('dashboard'); setSelId(null); }}>
+            {Ico.grid}&nbsp;Unpaid Bookings
+            {totalUnpaid > 0 && <span className="nav-badge">{totalUnpaid}</span>}
           </button>
           {insts.length > 0 && <>
             <div className="sb-sep">Instances</div>
