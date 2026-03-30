@@ -167,6 +167,16 @@ export async function fetchGapReservations(accountId, secret) {
   let d;
   try { d = JSON.parse(text); } catch { throw new Error(`Unexpected response (${r.status}): ${text.slice(0, 120)}`); }
   if (!r.ok) throw new Error(d.error || `Server error (${r.status})`);
+
+  // Log field names to console so we can find the conversation ID field
+  if (d.sampleFields && d.sampleFields.length > 0) {
+    const convFields = d.sampleFields.filter(f =>
+      /conv|thread|message|inbox|chat/i.test(f)
+    );
+    console.log('[Plux] All reservation fields:', d.sampleFields);
+    console.log('[Plux] Conversation-related fields:', convFields.length > 0 ? convFields : '(none found — check All fields above)');
+  }
+
   return d.reservations || [];
 }
 
@@ -225,11 +235,11 @@ export function makeGapsCSV(gaps) {
     ['Departing Guest',      g => g.departing.guestName || ''],
     ['Departing Channel',    g => g.departing.channelName || g.departing.source || ''],
     ['Departing Checkout',   g => g.departing.checkOutDate || g.departing.departureDate || ''],
-    ['Departing Message URL',g => g.departing.conversationId ? `https://dashboard.hostaway.com/messages/inbox/${g.departing.conversationId}` : ''],
+    ['Departing Message URL',g => { const cid = g.departing.conversationId||g.departing.guestConversationId||g.departing.conversation_id||g.departing.messageThreadId||g.departing.threadId||null; return cid ? `https://dashboard.hostaway.com/messages/inbox/${cid}` : ''; }],
     ['Arriving Guest',       g => g.arriving.guestName || ''],
     ['Arriving Channel',     g => g.arriving.channelName || g.arriving.source || ''],
     ['Arriving Checkin',     g => g.arriving.checkInDate || g.arriving.arrivalDate || ''],
-    ['Arriving Message URL', g => g.arriving.conversationId ? `https://dashboard.hostaway.com/messages/inbox/${g.arriving.conversationId}` : ''],
+    ['Arriving Message URL', g => { const cid = g.arriving.conversationId||g.arriving.guestConversationId||g.arriving.conversation_id||g.arriving.messageThreadId||g.arriving.threadId||null; return cid ? `https://dashboard.hostaway.com/messages/inbox/${cid}` : ''; }],
   ];
   const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const hdr = cols.map(([h]) => esc(h)).join(',');

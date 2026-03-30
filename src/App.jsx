@@ -568,6 +568,21 @@ function InstModal({ inst, onSave, onClose }) {
 }
 
 
+// ── Extract conversation ID from a reservation (tries all known Hostaway field names) ──
+function getConvId(res) {
+  return res.conversationId
+    || res.guestConversationId
+    || res.conversation_id
+    || res.messageThreadId
+    || res.guestMessageThreadId
+    || res.threadId
+    || res.thread_id
+    || res.guestThreadId
+    || res.inboxId
+    || res.messageId
+    || null;
+}
+
 // ── Gaps View ──────────────────────────────────────────────────────────────────
 function GapsView({ insts, cfg, onSheetsExport }) {
   const [gapData, setGapData] = useState({});   // { instId: { gaps, loading, err, fetchedAt } }
@@ -786,54 +801,36 @@ function GapsView({ insts, cfg, onSheetsExport }) {
                     <td><ChannelLogo name={g.departing.channelName || g.departing.source} /></td>
                     <td className="num" style={{ color: 'var(--tx-m)' }}>{fmtDate(g.departing.checkOutDate || g.departing.departureDate)}</td>
                     <td style={{ textAlign: 'center' }}>
-                      {g.departing.conversationId ? (
-                        <a
-                          href={`https://dashboard.hostaway.com/messages/inbox/${g.departing.conversationId}`}
-                          target="_blank" rel="noreferrer"
-                          className="btn btn-sec btn-xs"
-                          title={`Message ${g.departing.guestName}`}
-                          style={{ display: 'inline-flex', gap: 4 }}
-                        >
-                          {Ico.message} Message
-                        </a>
-                      ) : (
-                        <a
-                          href={`https://dashboard.hostaway.com/reservations/${g.departing.id || g.departing.reservationId}/`}
-                          target="_blank" rel="noreferrer"
-                          className="btn btn-sec btn-xs"
-                          title="Open reservation"
-                          style={{ display: 'inline-flex', gap: 4 }}
-                        >
-                          {Ico.extLink} View
-                        </a>
-                      )}
+                      {(() => {
+                        const cid = getConvId(g.departing);
+                        return cid ? (
+                          <a href={`https://dashboard.hostaway.com/messages/inbox/${cid}`} target="_blank" rel="noreferrer" className="btn btn-sec btn-xs" title={`Message ${g.departing.guestName}`} style={{ display: 'inline-flex', gap: 4 }}>
+                            {Ico.message} Message
+                          </a>
+                        ) : (
+                          <a href={`https://dashboard.hostaway.com/reservations/${g.departing.id || g.departing.reservationId}/`} target="_blank" rel="noreferrer" className="btn btn-sec btn-xs" title="Open reservation" style={{ display: 'inline-flex', gap: 4 }}>
+                            {Ico.extLink} View
+                          </a>
+                        );
+                      })()}
                     </td>
                     {/* Arriving guest */}
                     <td style={{ fontWeight: 500 }}>{g.arriving.guestName || '—'}</td>
                     <td><ChannelLogo name={g.arriving.channelName || g.arriving.source} /></td>
                     <td className="num" style={{ color: 'var(--tx-m)' }}>{fmtDate(g.arriving.checkInDate || g.arriving.arrivalDate)}</td>
                     <td style={{ textAlign: 'center' }}>
-                      {g.arriving.conversationId ? (
-                        <a
-                          href={`https://dashboard.hostaway.com/messages/inbox/${g.arriving.conversationId}`}
-                          target="_blank" rel="noreferrer"
-                          className="btn btn-sec btn-xs"
-                          title={`Message ${g.arriving.guestName}`}
-                          style={{ display: 'inline-flex', gap: 4 }}
-                        >
-                          {Ico.message} Message
-                        </a>
-                      ) : (
-                        <a
-                          href={`https://dashboard.hostaway.com/reservations/${g.arriving.id || g.arriving.reservationId}/`}
-                          target="_blank" rel="noreferrer"
-                          className="btn btn-sec btn-xs"
-                          title="Open reservation"
-                          style={{ display: 'inline-flex', gap: 4 }}
-                        >
-                          {Ico.extLink} View
-                        </a>
-                      )}
+                      {(() => {
+                        const cid = getConvId(g.arriving);
+                        return cid ? (
+                          <a href={`https://dashboard.hostaway.com/messages/inbox/${cid}`} target="_blank" rel="noreferrer" className="btn btn-sec btn-xs" title={`Message ${g.arriving.guestName}`} style={{ display: 'inline-flex', gap: 4 }}>
+                            {Ico.message} Message
+                          </a>
+                        ) : (
+                          <a href={`https://dashboard.hostaway.com/reservations/${g.arriving.id || g.arriving.reservationId}/`} target="_blank" rel="noreferrer" className="btn btn-sec btn-xs" title="Open reservation" style={{ display: 'inline-flex', gap: 4 }}>
+                            {Ico.extLink} View
+                          </a>
+                        );
+                      })()}
                     </td>
                   </tr>
                 ))}

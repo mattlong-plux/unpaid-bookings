@@ -97,7 +97,9 @@ exports.handler = async (event) => {
     const token = await haAuth(accountId, secret);
     if (action === 'gaps') {
       const reservations = await fetchGaps(token);
-      return { statusCode: 200, headers, body: JSON.stringify({ reservations }) };
+      // Return field names of first reservation to help identify the conversation ID field
+      const sampleFields = reservations.length > 0 ? Object.keys(reservations[0]) : [];
+      return { statusCode: 200, headers, body: JSON.stringify({ reservations, sampleFields }) };
     } else {
       const bookings = await fetchUnpaid(token);
       return { statusCode: 200, headers, body: JSON.stringify({ bookings }) };
