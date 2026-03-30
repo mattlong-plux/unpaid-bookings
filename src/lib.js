@@ -19,14 +19,29 @@ export const fmtAmt = (n, cur = 'NZD') => {
 
 // ── Hostaway API (via Netlify serverless proxy) ────────────────────────────────
 export async function fetchUnpaidBookings(accountId, secret) {
-  const r = await fetch('/.netlify/functions/hostaway', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accountId, secret })
-  });
-  const d = await r.json();
+  let r;
+  try {
+    r = await fetch('/.netlify/functions/hostaway', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId, secret })
+    });
+  } catch (e) {
+    throw new Error(`Network error — could not reach the server: ${e.message}`);
+  }
+
+  const text = await r.text();
+  if (!text) {
+    throw new Error(`Empty response (${r.status}). Check Netlify → Functions tab to confirm the function deployed.`);
+  }
+
+  let d;
+  try { d = JSON.parse(text); } catch {
+    throw new Error(`Unexpected server response (${r.status}): ${text.slice(0, 120)}`);
+  }
+
   if (!r.ok) throw new Error(d.error || `Server error (${r.status})`);
-  return d.bookings;
+  return d.bookings || [];
 }
 
 // ── CSV ────────────────────────────────────────────────────────────────────────
