@@ -168,15 +168,6 @@ export async function fetchGapReservations(accountId, secret) {
   try { d = JSON.parse(text); } catch { throw new Error(`Unexpected response (${r.status}): ${text.slice(0, 120)}`); }
   if (!r.ok) throw new Error(d.error || `Server error (${r.status})`);
 
-  // Log field names to console so we can find the conversation ID field
-  if (d.sampleFields && d.sampleFields.length > 0) {
-    const convFields = d.sampleFields.filter(f =>
-      /conv|thread|message|inbox|chat/i.test(f)
-    );
-    console.log('[Plux] All reservation fields:', d.sampleFields);
-    console.log('[Plux] Conversation-related fields:', convFields.length > 0 ? convFields : '(none found — check All fields above)');
-  }
-
   return d.reservations || [];
 }
 

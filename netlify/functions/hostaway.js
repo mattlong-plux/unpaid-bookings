@@ -55,6 +55,42 @@ async function fetchUnpaid(token) {
   });
 }
 
+async function fetchConversationMap(token, reservationIds) {
+  // Fetch conversations from Hostaway and build a reservationId -> conversationId map.
+  // The conversations endpoint returns threads that link to reservations.
+  const map = {};
+  let offset = 0;
+  const limit = 100;
+
+  while (true) {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    const r = await fetch(`${HA_BASE}/conversations?${params}`, {
+      headers: { Authorization: `Bearer ${token}`, 'Cache-Control': 'no-cache' }
+    });
+    if (!r.ok) break; // conversations endpoint may not be available on all plans — fail silently
+
+    const text = await r.text();
+    let d;
+    try { d = JSON.parse(text); } catch { break; }
+
+    const rows = d.result || d.results || [];
+    if (rows.length === 0) break;
+
+    for (const conv of rows) {
+      // Hostaway conversation objects have reservationId and id
+      const resId = conv.reservationId || conv.reservation_id;
+      const convId = conv.id || conv.conversationId;
+      if (resId && convId) map[String(resId)] = convId;
+    }
+
+    if (rows.length < limit) break;
+    offset += limit;
+    if (offset >= 2000) break; // safety cap
+  }
+
+  return map;
+}
+
 async function fetchGaps(token) {
   // Fetch active reservations from today through 90 days out
   const ACTIVE = ['confirmed', 'new', 'modified', 'pending', 'awaiting payment'];
@@ -69,7 +105,16 @@ async function fetchGaps(token) {
     checkInDateTo: fmt(future),
   }, 1200);
 
-  return rows.filter(b => ACTIVE.includes((b.status || '').toLowerCase()));
+  const active = rows.filter(b => ACTIVE.includes((b.status || '').toLowerCase()));
+
+  // Fetch conversations and enrich reservations with conversationId
+  const reservationIds = active.map(r => String(r.id || r.reservationId));
+  const convMap = await fetchConversationMap(token, reservationIds);
+
+  return active.map(r => ({
+    ...r,
+    conversationId: convMap[String(r.id || r.reservationId)] || null
+  }));
 }
 
 // CommonJS export — required for Netlify Functions
@@ -97,9 +142,7 @@ exports.handler = async (event) => {
     const token = await haAuth(accountId, secret);
     if (action === 'gaps') {
       const reservations = await fetchGaps(token);
-      // Return field names of first reservation to help identify the conversation ID field
-      const sampleFields = reservations.length > 0 ? Object.keys(reservations[0]) : [];
-      return { statusCode: 200, headers, body: JSON.stringify({ reservations, sampleFields }) };
+      return { statusCode: 200, headers, body: JSON.stringify({ reservations }) };
     } else {
       const bookings = await fetchUnpaid(token);
       return { statusCode: 200, headers, body: JSON.stringify({ bookings }) };

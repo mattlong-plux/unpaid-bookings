@@ -568,19 +568,9 @@ function InstModal({ inst, onSave, onClose }) {
 }
 
 
-// ── Extract conversation ID from a reservation (tries all known Hostaway field names) ──
+// ── Extract conversation ID — injected by Netlify function from /conversations endpoint ──
 function getConvId(res) {
-  return res.conversationId
-    || res.guestConversationId
-    || res.conversation_id
-    || res.messageThreadId
-    || res.guestMessageThreadId
-    || res.threadId
-    || res.thread_id
-    || res.guestThreadId
-    || res.inboxId
-    || res.messageId
-    || null;
+  return res.conversationId || null;
 }
 
 // ── Gaps View ──────────────────────────────────────────────────────────────────
