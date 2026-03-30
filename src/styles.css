@@ -223,3 +223,5 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); }
   .inst-grid { grid-template-columns: 1fr; }
   .page-hdr { flex-direction: column; }
 }
+
+.edit-link:hover { background: var(--primary-lt) !important; }

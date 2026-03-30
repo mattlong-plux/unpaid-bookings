@@ -119,7 +119,7 @@ function DashboardView({ insts, totalUnpaid, totalVal, onSelect, onFetch, onAdd 
                 <table>
                   <thead><tr>
                     <th>Instance</th><th>Guest</th><th>Property</th><th>Channel</th>
-                    <th>Check-in</th><th>Check-out</th><th>Amount</th><th>Status</th>
+                    <th>Check-in</th><th>Check-out</th><th>Amount</th><th>Status</th><th></th>
                   </tr></thead>
                   <tbody>
                     {allBookings.map((b, i) => (
@@ -132,6 +132,13 @@ function DashboardView({ insts, totalUnpaid, totalVal, onSelect, onFetch, onAdd 
                         <td className="num">{fmtDate(b.checkOutDate || b.departureDate)}</td>
                         <td className="num" style={{ fontWeight: 600, color: 'var(--err)' }}>{fmtAmt(b.totalPrice || b.price, b.currency)}</td>
                         <td><StatusChip status={b.status} /></td>
+                        <td style={{ textAlign: 'center', width: 40 }}>
+                          {(b.id || b.reservationId) && (
+                            <a href={`https://dashboard.hostaway.com/reservations/${b.id || b.reservationId}/edit`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: 'var(--primary)', display: 'inline-flex', padding: 4, borderRadius: 4, transition: 'background .15s' }} title="Edit in Hostaway">
+                              {Ico.extLink}
+                            </a>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -232,7 +239,7 @@ function InstView({ inst, hasDrive, driveLoading, onFetch, onCSV, onDrive, onEdi
             <thead><tr>
               <th>Booking ID</th><th>Guest</th><th>Property</th><th>Channel</th>
               <th>Check-in</th><th>Check-out</th><th>Nights</th><th>Amount</th>
-              <th>Status</th><th>Booked On</th>
+              <th>Status</th><th>Booked On</th><th></th>
             </tr></thead>
             <tbody>
               {bk.map((b, i) => (
@@ -250,6 +257,13 @@ function InstView({ inst, hasDrive, driveLoading, onFetch, onCSV, onDrive, onEdi
                   <td className="num" style={{ fontWeight: 600, color: 'var(--err)' }}>{fmtAmt(b.totalPrice || b.price, b.currency)}</td>
                   <td><StatusChip status={b.status} /></td>
                   <td className="num" style={{ fontSize: 12, color: 'var(--tx-mu)' }}>{fmtDate(b.createdAt || b.insertionTime)}</td>
+                  <td style={{ textAlign: 'center', width: 40 }}>
+                    {(b.id || b.reservationId) && (
+                      <a href={`https://dashboard.hostaway.com/reservations/${b.id || b.reservationId}/edit`} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', display: 'inline-flex', padding: 4, borderRadius: 4, transition: 'background .15s' }} title="Edit in Hostaway">
+                        {Ico.extLink}
+                      </a>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
